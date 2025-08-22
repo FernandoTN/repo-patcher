@@ -10,7 +10,7 @@ import shutil
 from .models import (
     ScenarioMetadata, 
     TestExecution, 
-    TestResult, 
+    ExecutionStatus, 
     FixAttempt, 
     EvaluationResult, 
     FixResult,
@@ -85,7 +85,7 @@ class EvaluationRunner:
                             error_message = line.strip()
                             break
 
-            test_result = TestResult.PASSED if result.returncode == 0 else TestResult.FAILED
+            test_result = ExecutionStatus.PASSED if result.returncode == 0 else ExecutionStatus.FAILED
             
             return TestExecution(
                 result=test_result,
@@ -101,7 +101,7 @@ class EvaluationRunner:
         except subprocess.TimeoutExpired:
             duration = time.time() - start_time
             return TestExecution(
-                result=TestResult.TIMEOUT,
+                result=ExecutionStatus.TIMEOUT,
                 stdout="",
                 stderr="Test execution timed out",
                 duration=duration,
@@ -113,7 +113,7 @@ class EvaluationRunner:
         except Exception as e:
             duration = time.time() - start_time
             return TestExecution(
-                result=TestResult.ERROR,
+                result=ExecutionStatus.ERROR,
                 stdout="",
                 stderr=str(e),
                 duration=duration,
@@ -138,7 +138,7 @@ class EvaluationRunner:
             
             # Run initial test to confirm it fails
             initial_test = self.run_tests(work_dir, scenario.test_command)
-            if initial_test.result == TestResult.PASSED:
+            if initial_test.result == ExecutionStatus.PASSED:
                 return EvaluationResult(
                     scenario_id=scenario_id,
                     result=FixResult.FAILURE,

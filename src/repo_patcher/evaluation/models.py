@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 
-class TestResult(Enum):
+class ExecutionStatus(Enum):
     """Test execution result."""
     PASSED = "passed"
     FAILED = "failed"
@@ -47,7 +47,7 @@ class ScenarioMetadata:
 @dataclass
 class TestExecution:
     """Result of running tests."""
-    result: TestResult
+    result: ExecutionStatus
     stdout: str
     stderr: str
     duration: float
