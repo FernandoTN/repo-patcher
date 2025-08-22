@@ -1,0 +1,21 @@
+{
+  "id": "E001",
+  "name": "missing_import",
+  "description": "Function uses sqrt() without importing math module",
+  "category": "import_dependency",
+  "difficulty": "easy",
+  "expected_iterations": 1,
+  "expected_diff_lines": 1,
+  "test_framework": "pytest",
+  "language": "python",
+  "files_to_change": ["src/calculator.py"],
+  "test_command": "python -m pytest tests/ -v",
+  "expected_error_patterns": [
+    "NameError: name 'sqrt' is not defined"
+  ],
+  "learning_objectives": [
+    "Detect missing import statements",
+    "Add appropriate import for used functions",
+    "Understand error messages about undefined names"
+  ]
+}
