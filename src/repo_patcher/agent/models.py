@@ -5,6 +5,9 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 import time
 
+from .config import AgentConfig
+from .context import SessionContext
+
 
 class AgentState(Enum):
     """States in the agent execution workflow."""
@@ -92,14 +95,20 @@ class AgentSession:
     session_id: str
     repository: RepositoryContext
     current_state: AgentState
+    config: AgentConfig = field(default_factory=AgentConfig)
+    context: SessionContext = field(default_factory=SessionContext)
     plan: Optional[FixPlan] = None
     patches: List[CodePatch] = field(default_factory=list)
     executions: List[StepExecution] = field(default_factory=list)
     iteration_count: int = 0
-    max_iterations: int = 3
     start_time: float = field(default_factory=time.time)
     end_time: Optional[float] = None
     total_cost: float = 0.0
+    
+    @property 
+    def max_iterations(self) -> int:
+        """Get max iterations from config."""
+        return self.config.max_iterations
     
     @property
     def is_complete(self) -> bool:
@@ -154,6 +163,31 @@ class AgentSession:
         """Set state to repair when tests fail."""
         if self.current_state == AgentState.TEST:
             self.current_state = AgentState.REPAIR
+    
+    def check_cost_limit(self) -> bool:
+        """Check if cost limit has been exceeded."""
+        return self.total_cost >= self.config.max_cost_per_session
+    
+    def check_time_limit(self) -> bool:
+        """Check if time limit has been exceeded."""
+        return self.duration >= self.config.max_session_duration
+    
+    def is_safe_to_continue(self) -> bool:
+        """Check if it's safe to continue execution."""
+        return not (self.check_cost_limit() or self.check_time_limit())
+    
+    def get_session_summary(self) -> Dict[str, Any]:
+        """Get a summary of the session."""
+        return {
+            "session_id": self.session_id,
+            "state": self.current_state.value,
+            "iterations": self.iteration_count,
+            "duration": self.duration,
+            "cost": self.total_cost,
+            "executions": len(self.executions),
+            "patches": len(self.patches),
+            "complete": self.is_complete
+        }
 
 
 @dataclass
