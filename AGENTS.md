@@ -1,6 +1,6 @@
 # Codex Agent Rules for Repo Patcher
 
-This document gives Codex persistent, repo-specific guidance. Treat it as the governing instruction set when working in this repository. Use it together with the detailed context in `CLAUDE.md` (source of truth for scope and requirements).
+This document gives Codex persistent, repo-specific guidance. Treat it as the governing instruction set when working in this repository. Use it together with the detailed context in `README.md` and `CLAUDE.md` (source of truth for scope and requirements).
 
 ## Objective
 
@@ -13,6 +13,11 @@ This document gives Codex persistent, repo-specific guidance. Treat it as the go
 - Full observability (tracing + metrics)
 - Reproducible behavior via state machine and limits
 
+## Environment
+
+- Python `3.9+`, Git, Docker (for container builds)
+- Code quality: `black`, `ruff`, `mypy`
+
 ## Scope and Non‑Goals (MVP)
 
 - Start with Python repositories using `pytest`
@@ -22,6 +27,8 @@ This document gives Codex persistent, repo-specific guidance. Treat it as the go
 
 Non‑goals (for now): multi-language repairs beyond basic pytest MVP, integration tests, infra/CI authoring or refactors not needed to pass tests.
 
+Project status: Phase 1A (Foundation) complete; Phase 1B (State Machine) in progress.
+
 ## Guardrails
 
 - Blocked paths/patterns:
@@ -30,7 +37,7 @@ Non‑goals (for now): multi-language repairs beyond basic pytest MVP, integrati
 - Iteration limit: ≤3 repair attempts
 - Time budget: ≤10 minutes per issue
 - Memory budget: ≤2GB container
-- Approval gates: large diffs (>50 lines) need approval; infra/CI changes auto‑escalate; repeated test timeouts/failures after 3 tries → escalate
+- Approval gates: large diffs (>50 lines) need approval; infra/CI changes auto‑escalate; repeated test timeouts/failures after 3 tries → escalate; enforce cost limits with automatic cutoffs
 - Rollback: if tests get worse or constraints violated, revert and try a minimal alternative within limits
 
 ## Operating Model (State Machine)
@@ -67,40 +74,54 @@ Core internal tools (conceptual API):
   - `repo_patcher_diff_lines{type="added|removed|modified"}`
   - `repo_patcher_cost_dollars{model="gpt-4o|gpt-4o-mini"}`
 
+Target performance (MVP guidance):
+- Success@1 ≥ 60% for simple scenarios (E001–E010)
+- Success@3 ≥ 85% across all scenarios
+- Average cost ≤ $0.50 per successful fix
+- Average diff ≤ 20 lines per fix
+- 100% compliance with guardrails
+
 ## Local Commands (for validation)
 
 Use these to validate changes locally when applicable:
 
 ```bash
-# Run tests
+# Run all tests
 python -m pytest tests/ -v
 
-# Lint
-ruff check . && black --check .
+# Run with coverage
+python -m pytest tests/ -v --cov=src/repo_patcher
+
+# Lint and format checks
+ruff check src/ tests/
+black --check src/ tests/
+
+# Type checking
+mypy src/
 
 # Build container
 docker build -t repo-patcher:latest .
 
 # Run evaluation harness
-python scripts/evaluate.py --scenarios scenarios/
-
-# Deploy to staging
-./scripts/deploy.sh staging
+python scripts/run_evaluation.py
 ```
 
 ## Commit Guidelines
 
-- Do not mention AI/automation in commits
-- Prefer clear, scoped messages (e.g., "Fix test framework detection logic")
+- Use Conventional Commits style (`feat:`, `fix:`, `chore:`, etc.)
+- Focus messages on the "why"; keep scope tight
+- Never mention AI/automation or tooling in commit messages
+- Examples: `feat: add state machine skeleton`, `fix: handle timeout in test execution`
 
 ## Startup Reading Order for Codex
 
 When a new session starts, first read:
 1) `AGENTS.md` (this file) for rules and constraints
-2) `CLAUDE.md` for detailed scope, architecture, and evaluation criteria
-3) `CONTRIBUTING.md` for local commands and commit rules
+2) `README.md` for project overview, commands, and roadmap
+3) `CLAUDE.md` for detailed scope, architecture, and evaluation criteria
+4) `evaluation_design.md` for the evaluation framework
+5) `CONTRIBUTING.md` for workflow and commit rules
 
 ## Source of Truth
 
-- If any guidance here seems to conflict with `CLAUDE.md`, treat `CLAUDE.md` as the detailed source of truth and this file as the agent’s concise operating manual.
-
+- If any guidance here seems to conflict, use this precedence: `README.md` for developer commands and status; `CLAUDE.md` for deep technical scope/architecture; `evaluation_design.md` for evaluation specifics; `AGENTS.md` remains the concise operating manual.
