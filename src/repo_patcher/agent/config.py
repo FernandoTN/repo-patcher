@@ -29,9 +29,13 @@ class AgentConfig:
     patch_backup: bool = True
     
     # AI settings
-    model_name: str = "gpt-4"
+    model_name: str = "gpt-4o-mini"  # Using gpt-4o-mini as requested (gpt-5-nano not available)
     temperature: float = 0.1
     max_tokens: int = 4000
+    openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None
+    retry_attempts: int = 3
+    retry_delay: float = 1.0
     
     # File restrictions
     blocked_paths: list = None
@@ -57,9 +61,13 @@ class AgentConfig:
         return cls(
             max_iterations=int(os.getenv("AGENT_MAX_ITERATIONS", "3")),
             max_cost_per_session=float(os.getenv("AGENT_MAX_COST", "5.0")),
-            model_name=os.getenv("AGENT_MODEL", "gpt-4"),
+            model_name=os.getenv("AGENT_MODEL", "gpt-4o-mini"),
             temperature=float(os.getenv("AGENT_TEMPERATURE", "0.1")),
             test_timeout=int(os.getenv("AGENT_TEST_TIMEOUT", "60")),
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            openai_base_url=os.getenv("OPENAI_BASE_URL"),
+            retry_attempts=int(os.getenv("AGENT_RETRY_ATTEMPTS", "3")),
+            retry_delay=float(os.getenv("AGENT_RETRY_DELAY", "1.0")),
         )
     
     @classmethod

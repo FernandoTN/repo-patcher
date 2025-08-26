@@ -22,7 +22,7 @@ class TestAgentConfig:
         
         assert config.max_iterations == 3
         assert config.max_cost_per_session == 5.0
-        assert config.model_name == "gpt-4"
+        assert config.model_name == "gpt-4o-mini"
         assert config.temperature == 0.1
         assert len(config.blocked_paths) > 0
         assert len(config.allowed_file_types) > 0

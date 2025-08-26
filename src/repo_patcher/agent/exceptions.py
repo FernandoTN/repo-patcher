@@ -49,3 +49,13 @@ class TestExecutionError(AgentError):
 class PatchApplicationError(AgentError):
     """Error applying code patches."""
     pass
+
+
+class ConfigurationError(AgentError):
+    """Configuration or setup error."""
+    pass
+
+
+class AIClientError(AgentError):
+    """Error with AI client operations."""
+    pass

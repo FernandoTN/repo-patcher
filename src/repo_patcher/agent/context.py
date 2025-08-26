@@ -47,6 +47,11 @@ class SessionContext:
     code: CodeContext = field(default_factory=CodeContext)
     conversation: ConversationContext = field(default_factory=ConversationContext)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    code_context: Dict[str, Any] = field(default_factory=dict)  # Additional code context storage
+    
+    def add_code_context(self, key: str, value: Any) -> None:
+        """Add code context information."""
+        self.code_context[key] = value
     
     def save_to_file(self, path: Path) -> None:
         """Save context to JSON file."""
