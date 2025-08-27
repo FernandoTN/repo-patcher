@@ -1,0 +1,43 @@
+# Prometheus alerting rules for Repo Patcher
+groups:
+  - name: repo-patcher-alerts
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(repo_patcher_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in Repo Patcher"
+          description: "Error rate is {{ $value }} errors per second"
+
+      # High cost per fix
+      - alert: HighCostPerFix
+        expr: repo_patcher_cost_dollars > 2.0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High cost per fix detected"
+          description: "Cost per fix is ${{ $value }}, exceeding threshold"
+
+      # Long execution time
+      - alert: LongExecutionTime
+        expr: repo_patcher_duration_seconds > 900
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long execution time detected"
+          description: "Execution time is {{ $value }}s, exceeding 15-minute threshold"
+
+      # API rate limiting
+      - alert: APIRateLimited
+        expr: increase(repo_patcher_rate_limited_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API rate limiting detected"
+          description: "{{ $value }} rate limit events in the last 5 minutes"

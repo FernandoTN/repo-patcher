@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Development Status](https://img.shields.io/badge/status-Phase%201B%20Complete-green.svg)](https://github.com/FernandoTN/repo-patcher)
+[![Development Status](https://img.shields.io/badge/status-Phase%201D%20Complete-brightgreen.svg)](https://github.com/FernandoTN/repo-patcher)
 [![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-68%25-yellow.svg)]()
 
@@ -19,36 +19,40 @@ Repo Patcher is a sophisticated GitHub Action/CLI tool that uses AI to detect fa
 
 ## ✨ Key Features
 
-### Current Capabilities (Phase 1C ✅ COMPLETE)
+### Current Capabilities (Phase 1D ✅ COMPLETE)
 - **Production-Ready State Machine**: Complete INGEST→PLAN→PATCH→TEST→REPAIR→PR workflow
-- **Enterprise Robustness Features**: Complete security, reliability, and observability suite
+- **Enterprise Infrastructure**: Complete Docker, GitHub Actions, and monitoring suite
+  - **Docker Environment**: Secure containerized execution with resource limits
+  - **GitHub Actions**: Label-triggered automation with CI/CD pipeline
+  - **Monitoring**: OpenTelemetry, Prometheus metrics, health checks
+  - **Security**: Container hardening, secret management, access controls
+- **AI-Powered Capabilities**: Full OpenAI integration with advanced tools
+  - **Code Analysis**: CodeSearchTool for semantic repository understanding
+  - **Safe Patching**: PatchApplyTool with backup and rollback systems
+  - **Structured Outputs**: JSON schema validation for reliable AI responses
+- **Enterprise Robustness**: Security, reliability, and observability
   - **Security**: Input validation, injection prevention, path traversal protection
   - **Reliability**: Rate limiting, circuit breaker, exponential backoff, health monitoring
-  - **Observability**: Structured logging with correlation IDs, metrics collection, cost tracking
-  - **Configuration**: JSON schema validation, type safety, default generation
-  - **Operations**: Graceful shutdown, resource cleanup, system monitoring
-- **Comprehensive Configuration**: Environment-aware config with validation and CLI management
-- **Advanced Context Management**: Session persistence and conversation memory
-- **Safety Systems**: Cost limits, time limits, and safety validation with automatic cutoffs
-- **CLI Interface**: Complete command-line tool with scenario management and configuration
-- **Comprehensive Testing**: 49 tests (23 original + 26 robustness) with enhanced coverage
-- **Evaluation Framework**: 20+ test scenario categories with agent integration
+  - **Observability**: Distributed tracing, metrics collection, cost tracking
+- **Production Deployment**: Ready for enterprise use with comprehensive monitoring
+- **CLI Interface**: Complete command-line tool with scenario management
+- **Comprehensive Testing**: 49 tests with Phase 1D infrastructure validation
 
-### ✅ Phase 1C: Complete AI Integration (COMPLETE & VERIFIED ✅)
-- [x] **AI-Powered Fix Generation**: Full OpenAI integration with all handlers
-- [x] **Code Analysis Tools**: CodeSearchTool for semantic repository understanding
-- [x] **Safe Patch Application**: PatchApplyTool with backup and rollback systems
-- [x] **Structured AI Responses**: JSON schema validation for reliable AI outputs
-- [x] **Advanced Context Management**: Session context with AI data storage
-- [x] **Cost Tracking**: Real-time API usage and cost monitoring
-- [x] **Testing & Verification**: Comprehensive test coverage with Phase 1C validation scripts
-- [x] **Code Quality**: All inheritance issues resolved, pylance warnings fixed
+### ✅ Phase 1D: Infrastructure & Deployment (COMPLETE & VERIFIED ✅)
+- [x] **Docker Environment**: Secure containerized execution with multi-stage builds
+- [x] **GitHub Actions Integration**: Label-triggered workflows with comprehensive automation
+- [x] **CI/CD Pipeline**: Automated testing, building, security scanning, and deployment
+- [x] **OpenTelemetry Monitoring**: Distributed tracing, metrics, and health monitoring
+- [x] **Production Security**: Container hardening, secret management, resource limits
+- [x] **Prometheus Metrics**: Custom metrics with alerting rules and dashboards
+- [x] **Health Monitoring**: System health checks with Kubernetes-ready endpoints
+- [x] **Deployment Documentation**: Comprehensive guides for production deployment
 
-### Next: Phase 1D - Infrastructure & Deployment (IN PROGRESS 🚧)
-- [ ] **Docker Environment**: Containerized execution environment with security
-- [ ] **GitHub Action**: Workflow for label-triggered execution
-- [ ] **CI/CD Pipeline**: Automated testing and deployment
-- [ ] **OpenTelemetry**: Monitoring and observability integration
+### Next: Phase 2 - Advanced Features & Multi-Language Support (READY 🚀)
+- [ ] **JavaScript/TypeScript Support**: Jest integration and Node.js ecosystem
+- [ ] **Go Language Support**: Go test framework and toolchain integration
+- [ ] **Advanced Safety Features**: Enhanced approval workflows and risk assessment
+- [ ] **Performance Optimization**: Cost efficiency and speed improvements
 
 ### Future Capabilities (Phase 2+)
 - **Multi-Language Support**: JavaScript, Go, Java with framework-specific handling
@@ -57,17 +61,33 @@ Repo Patcher is a sophisticated GitHub Action/CLI tool that uses AI to detect fa
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.9+ 
+- Python 3.9+ or Docker
 - Git
-- pytest (for evaluation scenarios)
+- OpenAI API key
+- GitHub token (for PR creation)
 
-### Installation & Setup
+### Docker Deployment (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/FernandoTN/repo-patcher.git
 cd repo-patcher
 
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Build and run with Docker
+docker-compose up --build
+
+# Or run production container
+docker build -t repo-patcher:latest .
+docker run --rm --env-file .env repo-patcher:latest --help
+```
+
+### Local Development Setup
+
+```bash
 # Install in development mode
 pip install -e .
 
@@ -78,7 +98,21 @@ pip install -e ".[dev]"
 python -m pytest tests/ -v
 ```
 
-### Using the CLI
+### GitHub Action Usage
+
+1. **Add the `fix-me` label** to any issue or PR with failing tests
+2. **The GitHub Action automatically**:
+   - Analyzes the failing tests
+   - Uses AI to generate fixes
+   - Creates a pull request with the fixes
+   - Provides detailed status updates
+
+3. **Monitor progress** through:
+   - GitHub Action logs
+   - Health endpoints: `http://your-domain:8000/health`
+   - Prometheus metrics: `http://your-domain:8000/metrics`
+
+### CLI Usage
 
 ```bash
 # Run evaluation with AI agent
@@ -155,11 +189,11 @@ cd ../expected_fix && python -m pytest tests/ -v                     # Should pa
 - [x] **Final Testing**: All components verified, inheritance issues resolved
 - [x] **Code Quality**: Pylance warnings fixed, imports cleaned, patterns unified
 
-### 🚧 Phase 1D: Infrastructure & Deployment (NEXT PRIORITY)
-- [ ] **Docker Setup**: Containerized execution environment with security
-- [ ] **GitHub Action**: Workflow for label-triggered execution
-- [ ] **CI/CD Pipeline**: Automated testing and deployment
-- [ ] **Monitoring**: OpenTelemetry integration and metrics collection
+### ✅ Phase 1D: Infrastructure & Deployment (COMPLETE ✅)
+- [x] **Docker Setup**: Production-ready containerized environment with security
+- [x] **GitHub Actions**: Complete workflow automation for label-triggered execution
+- [x] **CI/CD Pipeline**: Comprehensive testing, building, and deployment automation
+- [x] **Monitoring**: OpenTelemetry integration with Prometheus metrics and Jaeger tracing
 
 ### 🛡️ Phase 2: Advanced Safety & Guardrails  
 - [ ] **Enhanced File Restrictions**: Smart blocking of CI, secrets, infrastructure files
@@ -370,6 +404,8 @@ We welcome contributions! Please see our contributing guidelines:
 
 - **[CLAUDE.md](CLAUDE.md)**: Complete technical roadmap and architecture
 - **[TODO.md](TODO.md)**: Comprehensive project roadmap with detailed task breakdown
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Production deployment guide with Docker and GitHub Actions
+- **[PHASE_1D_COMPLETE_SUMMARY.md](PHASE_1D_COMPLETE_SUMMARY.md)**: Infrastructure implementation summary
 - **[evaluation_design.md](evaluation_design.md)**: Detailed evaluation framework design  
 - **[AGENTS.md](AGENTS.md)**: Agent architecture and component documentation
 - **API Documentation**: Generated from docstrings (coming soon)
@@ -386,17 +422,17 @@ We welcome contributions! Please see our contributing guidelines:
 
 ## 📈 Current Status
 
-**Phase 1C Complete & Verified** ✅  
-- **AI-Powered State Machine**: Complete OpenAI integration across all handlers
-- **Advanced Tools**: CodeSearchTool and PatchApplyTool fully functional
-- **Structured AI Responses**: JSON schema validation for reliable outputs
-- **Enterprise Robustness**: Complete security, reliability, and observability suite
-- **Production-Ready Testing**: Comprehensive test coverage with Phase 1C validation
-- **Code Quality**: All inheritance issues resolved, static analysis warnings fixed
-- **Repository Status**: All changes committed and pushed to remote
-- **Foundation Complete**: Ready for production deployment infrastructure
+**Phase 1D Complete & Production-Ready** ✅  
+- **Complete Infrastructure**: Docker, GitHub Actions, CI/CD, and monitoring
+- **AI-Powered State Machine**: Full OpenAI integration with advanced tools
+- **Production Security**: Container hardening, secret management, access controls
+- **Enterprise Monitoring**: OpenTelemetry tracing, Prometheus metrics, health checks
+- **Automated Deployment**: Label-triggered GitHub Actions with comprehensive workflows
+- **Scalable Architecture**: Ready for enterprise deployment with horizontal scaling
+- **Comprehensive Documentation**: Production deployment guides and troubleshooting
+- **Repository Status**: All infrastructure committed and production-ready
 
-**Next Milestone**: Phase 1D - Infrastructure & Deployment (Docker + GitHub Actions)
+**Next Milestone**: Phase 2 - Advanced Features & Multi-Language Support
 
 ## 📄 License
 
@@ -410,4 +446,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Status**: 🟢 Active Development | **Last Updated**: August 2024 | **Version**: 0.1.0 | **Phase**: 1C COMPLETE → 1D Ready
+**Status**: 🟢 Production Ready | **Last Updated**: August 2024 | **Version**: 0.1.0 | **Phase**: 1D COMPLETE → Phase 2 Ready

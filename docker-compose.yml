@@ -1,0 +1,123 @@
+# Docker Compose configuration for Repo Patcher
+# Supports both development and production environments
+
+version: '3.8'
+
+services:
+  repo-patcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: repo-patcher
+    environment:
+      # AI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      
+      # GitHub Configuration  
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+      
+      # Agent Configuration
+      - REPO_PATCHER_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - REPO_PATCHER_MAX_COST=${MAX_COST:-5.00}
+      - REPO_PATCHER_MAX_ITERATIONS=${MAX_ITERATIONS:-3}
+      - REPO_PATCHER_TIMEOUT=${TIMEOUT:-600}
+      
+      # Monitoring
+      - OTEL_SERVICE_NAME=repo-patcher
+      - OTEL_SERVICE_VERSION=0.1.0
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=repo-patcher,service.version=0.1.0
+    
+    volumes:
+      # Mount workspace for repository operations
+      - ./workspace:/workspace/workspace
+      - ./logs:/workspace/logs
+      - ./backups:/workspace/backups
+    
+    # Resource limits for safety
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Needs write access for git operations
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    
+    # Network isolation
+    networks:
+      - repo-patcher-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import repo_patcher; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development service variant
+  repo-patcher-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: repo-patcher-dev
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REPO_PATCHER_LOG_LEVEL=DEBUG
+      - PYTHONPATH=/workspace/src
+    volumes:
+      - .:/workspace
+      - ./logs:/workspace/logs
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+    networks:
+      - repo-patcher-network
+    profiles:
+      - dev
+
+  # Monitoring stack (optional)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: repo-patcher-jaeger
+    ports:
+      - "14268:14268"  # Jaeger collector
+      - "16686:16686"  # Jaeger UI
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - repo-patcher-network
+    profiles:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: repo-patcher-prometheus  
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - repo-patcher-network
+    profiles:
+      - monitoring
+
+networks:
+  repo-patcher-network:
+    driver: bridge
+    
+volumes:
+  workspace:
+  logs:
+  backups:

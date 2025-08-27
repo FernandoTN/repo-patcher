@@ -1,0 +1,236 @@
+# GitHub Action: Repo Patcher - Automated Test Fixing
+# Triggers when 'fix-me' label is applied to issues or PRs
+
+name: 🤖 Fix Failing Tests
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+
+# Permissions needed for the action
+permissions:
+  contents: write      # Read/write repository content
+  pull-requests: write # Create and update pull requests
+  issues: write        # Update issues with status
+  checks: read         # Read check runs
+  actions: read        # Read action workflows
+
+jobs:
+  fix-tests:
+    name: 🔧 Analyze and Fix Tests
+    runs-on: ubuntu-latest
+    
+    # Only run if the 'fix-me' label was added
+    if: contains(github.event.label.name, 'fix-me')
+    
+    # Timeout after 15 minutes to prevent runaway jobs
+    timeout-minutes: 15
+    
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO_PATCHER_LOG_LEVEL: INFO
+      REPO_PATCHER_MAX_COST: 5.00
+      REPO_PATCHER_MAX_ITERATIONS: 3
+      REPO_PATCHER_TIMEOUT: 600
+    
+    steps:
+      # Step 1: Checkout the repository
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Step 2: Set up Python environment
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      # Step 3: Install system dependencies
+      - name: 📦 Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl build-essential
+      
+      # Step 4: Set up Docker for containerized execution
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      # Step 5: Build Repo Patcher container
+      - name: 🏗️ Build Repo Patcher Container
+        run: |
+          docker build -t repo-patcher:latest .
+          echo "Container built successfully"
+      
+      # Step 6: Create safe workspace
+      - name: 📁 Prepare Workspace
+        run: |
+          mkdir -p workspace logs backups
+          chmod 755 workspace logs backups
+          echo "Workspace prepared"
+      
+      # Step 7: Run failing tests to identify issues
+      - name: 🧪 Identify Failing Tests
+        id: test-status
+        run: |
+          echo "::group::Running initial test suite"
+          
+          # Try to run tests and capture output
+          if python -m pytest tests/ -v --tb=short > test_output.txt 2>&1; then
+            echo "tests-passing=true" >> $GITHUB_OUTPUT
+            echo "✅ All tests are currently passing"
+            cat test_output.txt
+          else
+            echo "tests-passing=false" >> $GITHUB_OUTPUT
+            echo "❌ Found failing tests"
+            cat test_output.txt
+          fi
+          
+          echo "::endgroup::"
+        continue-on-error: true
+      
+      # Step 8: Run Repo Patcher if tests are failing
+      - name: 🤖 Run Repo Patcher Agent
+        if: steps.test-status.outputs.tests-passing == 'false'
+        id: fix-tests
+        run: |
+          echo "::group::Running Repo Patcher"
+          
+          # Create issue context
+          cat > issue_context.json << EOF
+          {
+            "issue_number": "${{ github.event.issue.number || github.event.pull_request.number }}",
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}"
+          }
+          EOF
+          
+          # Run the agent in containerized environment
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace/repo \
+            -v ${{ github.workspace }}/logs:/workspace/logs \
+            -v ${{ github.workspace }}/backups:/workspace/backups \
+            -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+            -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+            -e REPO_PATCHER_LOG_LEVEL="$REPO_PATCHER_LOG_LEVEL" \
+            -e REPO_PATCHER_MAX_COST="$REPO_PATCHER_MAX_COST" \
+            -e REPO_PATCHER_MAX_ITERATIONS="$REPO_PATCHER_MAX_ITERATIONS" \
+            -e REPO_PATCHER_TIMEOUT="$REPO_PATCHER_TIMEOUT" \
+            --memory=2g \
+            --cpus=2 \
+            --security-opt=no-new-privileges:true \
+            repo-patcher:latest \
+            fix-repo /workspace/repo \
+            --output-format json \
+            --create-pr \
+            --issue-context /workspace/repo/issue_context.json
+          
+          echo "::endgroup::"
+        continue-on-error: true
+      
+      # Step 9: Verify fixes by running tests again
+      - name: ✅ Verify Test Fixes
+        if: steps.fix-tests.outcome == 'success'
+        id: verify-fixes
+        run: |
+          echo "::group::Verifying fixes"
+          
+          if python -m pytest tests/ -v --tb=short; then
+            echo "fix-successful=true" >> $GITHUB_OUTPUT
+            echo "✅ All tests now pass after fixes!"
+          else
+            echo "fix-successful=false" >> $GITHUB_OUTPUT
+            echo "❌ Some tests still failing after fixes"
+          fi
+          
+          echo "::endgroup::"
+      
+      # Step 10: Update issue/PR with results
+      - name: 📝 Update Issue with Results  
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            const tests_passing = '${{ steps.test-status.outputs.tests-passing }}';
+            const fix_successful = '${{ steps.verify-fixes.outputs.fix-successful }}';
+            
+            let comment_body = '## 🤖 Repo Patcher Results\n\n';
+            
+            if (tests_passing === 'true') {
+              comment_body += '✅ **Status**: All tests were already passing! No fixes needed.\n\n';
+              comment_body += '💡 Consider removing the `fix-me` label if the issue is resolved.';
+            } else if (fix_successful === 'true') {
+              comment_body += '✅ **Status**: Successfully fixed failing tests!\n\n';
+              comment_body += '🎉 All tests now pass. A pull request should be created with the fixes.\n\n';
+              comment_body += '📋 **Next Steps**:\n';
+              comment_body += '- Review the generated PR for accuracy\n';
+              comment_body += '- Test the changes in your environment\n';
+              comment_body += '- Merge if the fixes look good\n\n';
+            } else if (fix_successful === 'false') {
+              comment_body += '⚠️ **Status**: Attempted fixes but some tests still failing\n\n';
+              comment_body += '🔍 The agent tried to fix the issues but couldn\'t resolve everything.\n\n';
+              comment_body += '📋 **Recommended Actions**:\n';
+              comment_body += '- Check the logs for details on what was attempted\n';
+              comment_body += '- Manual intervention may be required\n';
+              comment_body += '- Consider simplifying the failing tests\n\n';
+            } else {
+              comment_body += '❌ **Status**: Unable to process fixes\n\n';
+              comment_body += '🚨 The agent encountered an error during execution.\n\n';
+              comment_body += '📋 **Troubleshooting**:\n';
+              comment_body += '- Check that `OPENAI_API_KEY` is properly configured\n';
+              comment_body += '- Verify the repository has failing tests to fix\n';
+              comment_body += '- Review the action logs for error details\n\n';
+            }
+            
+            comment_body += `\n---\n💡 Triggered by the \`fix-me\` label | 🕒 ${new Date().toISOString()}`;
+            
+            await github.rest.issues.createComment({
+              issue_number: issue_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment_body
+            });
+      
+      # Step 11: Upload logs and artifacts  
+      - name: 📤 Upload Logs and Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-patcher-logs-${{ github.run_number }}
+          path: |
+            logs/
+            test_output.txt
+            issue_context.json
+          retention-days: 7
+      
+      # Step 12: Clean up workspace
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          # Clean up any sensitive data or large files
+          rm -rf backups/ workspace/ || true
+          echo "Cleanup completed"
+
+  # Security job - scan for secrets in any created PRs
+  security-scan:
+    name: 🔐 Security Scan
+    runs-on: ubuntu-latest
+    if: contains(github.event.label.name, 'fix-me')
+    needs: fix-tests
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🔍 Run Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD

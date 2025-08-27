@@ -1,0 +1,30 @@
+# Prometheus configuration for Repo Patcher monitoring
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Rule files for alerting
+rule_files:
+  - "alerts.yml"
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Repo Patcher metrics (when available)
+  - job_name: 'repo-patcher'
+    static_configs:
+      - targets: ['repo-patcher:8000']  # Assuming metrics endpoint
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scheme: http
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093

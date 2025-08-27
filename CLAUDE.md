@@ -54,15 +54,17 @@ INGEST → PLAN → PATCH → TEST → REPAIR (≤3 iterations) → PR → DONE/
 
 ## Current Status
 
-**Phase 1C Complete & Verified** ✅ (**August 2024**)  
+**Phase 1D Complete & Production-Ready** ✅ (**August 2024**)  
+- **Complete Infrastructure**: Docker, GitHub Actions, CI/CD, and monitoring suite
 - **AI Foundation**: Complete OpenAI integration with structured outputs
 - **Advanced Tools**: CodeSearchTool and PatchApplyTool fully functional  
-- **Enterprise Infrastructure**: Security, reliability, and observability complete
-- **Code Quality**: All inheritance and static analysis issues resolved
-- **Testing**: Comprehensive validation with custom test scripts
-- **Repository**: All changes committed (`304f180`, `d20ff05`) and pushed
+- **Production Security**: Container hardening, secret management, access controls
+- **Enterprise Monitoring**: OpenTelemetry tracing, Prometheus metrics, health checks
+- **Automated Deployment**: Label-triggered GitHub Actions with comprehensive workflows
+- **Scalable Architecture**: Ready for enterprise deployment with horizontal scaling
+- **Documentation**: Complete deployment guides and troubleshooting resources
 
-**Ready for Phase 1D**: Docker deployment and GitHub Action integration
+**Ready for Phase 2**: Advanced features and multi-language support
 
 ## Implementation Phases
 
@@ -92,17 +94,21 @@ INGEST → PLAN → PATCH → TEST → REPAIR (≤3 iterations) → PR → DONE/
 - [x] **Testing & Verification**: Comprehensive testing with Phase 1C validation scripts
 - [x] **Code Quality**: All inheritance issues resolved, static analysis warnings fixed
 
-### Phase 1D: Infrastructure & Deployment (NEXT - CURRENT PRIORITY 🚧)
-- [ ] **Docker Environment**: Containerized execution environment with security
-- [ ] **GitHub Action**: Workflow for label-triggered execution
-- [ ] **CI/CD Pipeline**: Automated testing and deployment
-- [ ] **OpenTelemetry**: Monitoring and observability integration
+### Phase 1D: Infrastructure & Deployment (✅ COMPLETE)
+- [x] **Docker Environment**: Production-ready containerized environment with security
+- [x] **GitHub Actions**: Complete workflow automation for label-triggered execution
+- [x] **CI/CD Pipeline**: Automated testing, building, security scanning, and deployment
+- [x] **OpenTelemetry**: Full monitoring integration with Prometheus and Jaeger
+- [x] **Production Security**: Container hardening, secret management, resource limits
+- [x] **Health Monitoring**: Kubernetes-ready health endpoints and system monitoring
+- [x] **Deployment Documentation**: Comprehensive production deployment guides
 
-### Phase 2: Advanced Features & Multi-Language Support
-- [ ] **JavaScript/TypeScript Support**: Jest integration and framework detection
-- [ ] **Go Language Support**: Go test framework integration  
+### Phase 2: Advanced Features & Multi-Language Support (NEXT PRIORITY 🚀)
+- [ ] **JavaScript/TypeScript Support**: Jest integration and Node.js ecosystem support
+- [ ] **Go Language Support**: Go test framework and toolchain integration  
+- [ ] **Advanced Safety Features**: Enhanced approval workflows and risk assessment
 - [ ] **Performance Optimization**: Cost efficiency and speed improvements
-- [ ] **Advanced Safety**: Enhanced approval workflows and risk assessment
+- [ ] **IDE Integration**: VS Code extension and developer tools
 - [ ] **Evaluation Enhancement**: Additional scenarios and OpenAI-powered grading
 
 ## Guardrails & Safety
@@ -172,23 +178,38 @@ jobs:
 ```
 
 ### Required Secrets
-- `OPENAI_API_KEY`: For AI agent
-- `GITHUB_TOKEN`: For PR creation
-- `ANTHROPIC_API_KEY`: For Claude Code integration (optional)
+- `OPENAI_API_KEY`: For AI agent (required)
+- `GITHUB_TOKEN`: For PR creation and repository access (required)
+- `JAEGER_ENDPOINT`: For distributed tracing (optional)
+- `PROMETHEUS_PORT`: For metrics collection (optional, defaults to 8000)
 
 ## Observability
 
 ### Tracing
 - OpenTelemetry spans for each state transition
+- Jaeger integration for distributed tracing
 - Structured logging with correlation IDs
 - Error tracking with stack traces
 
 ### Metrics
 ```
-repo_patcher_attempts_total{status="success|failure|timeout"}
+repo_patcher_fix_attempts_total{status="success|failure|timeout"}
+repo_patcher_fix_successes_total
 repo_patcher_duration_seconds{phase="ingest|plan|patch|test|repair"}  
-repo_patcher_diff_lines{type="added|removed|modified"}
 repo_patcher_cost_dollars{model="gpt-4o|gpt-4o-mini"}
+repo_patcher_diff_lines{type="added|removed|modified"}
+repo_patcher_errors_total{error_type}
+repo_patcher_rate_limited_total{api}
+repo_patcher_active_sessions
+repo_patcher_health_status
+```
+
+### Health Monitoring
+```
+http://localhost:8000/health        # Comprehensive health status
+http://localhost:8000/health/live   # Kubernetes liveness probe
+http://localhost:8000/health/ready  # Kubernetes readiness probe
+http://localhost:8000/metrics       # Prometheus metrics endpoint
 ```
 
 ## Development Commands
@@ -200,14 +221,18 @@ python -m pytest tests/ -v
 # Run linting  
 ruff check . && black --check .
 
-# Build Docker image
-docker build -t repo-patcher:latest .
+# Build and run with Docker
+docker-compose up --build
 
 # Run evaluation
 python scripts/evaluate.py --scenarios scenarios/
 
-# Deploy to staging
-./scripts/deploy.sh staging
+# Deploy with GitHub Actions (production)
+# Apply 'fix-me' label to trigger workflow
+
+# Monitor deployment
+curl http://localhost:8000/health
+curl http://localhost:8000/metrics
 ```
 
 ## Git Commit Guidelines

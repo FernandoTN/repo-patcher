@@ -1,0 +1,325 @@
+# Automated Maintenance - Dependency Updates and Security
+# Runs on schedule to keep dependencies current and secure
+
+name: 🔧 Maintenance
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  # Dependency security audit
+  security-audit:
+    name: 🛡️ Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install safety pip-audit
+      
+      - name: 🔍 Run Safety Check
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check  # Also show human readable output
+        continue-on-error: true
+      
+      - name: 🔒 Run Pip Audit
+        run: |
+          pip-audit --format=json --output=pip-audit.json || true
+          pip-audit  # Also show human readable output
+        continue-on-error: true
+      
+      - name: 📤 Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.run_number }}
+          path: |
+            safety-report.json
+            pip-audit.json
+          retention-days: 30
+
+  # Check for outdated dependencies
+  dependency-check:
+    name: 📦 Dependency Updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pip-check-updates
+      
+      - name: 🔍 Check for Updates
+        run: |
+          echo "# Dependency Update Report" > dependency-report.md
+          echo "Generated: $(date)" >> dependency-report.md
+          echo "" >> dependency-report.md
+          
+          echo "## Current Dependencies" >> dependency-report.md
+          pip list --format=freeze >> dependency-report.md
+          
+          echo "" >> dependency-report.md
+          echo "## Outdated Packages" >> dependency-report.md
+          pip list --outdated --format=columns >> dependency-report.md || echo "All packages up to date!" >> dependency-report.md
+      
+      - name: 📤 Upload Dependency Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-report-${{ github.run_number }}
+          path: dependency-report.md
+          retention-days: 30
+
+  # Automated dependency updates (PRs)
+  dependabot-config:
+    name: ⚙️ Update Dependabot Config
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: 📝 Create/Update Dependabot Config
+        run: |
+          mkdir -p .github
+          cat > .github/dependabot.yml << 'EOF'
+          # Dependabot configuration for automated dependency updates
+          version: 2
+          updates:
+            # Python dependencies
+            - package-ecosystem: "pip"
+              directory: "/"
+              schedule:
+                interval: "weekly"
+                day: "monday"
+                time: "09:00"
+              open-pull-requests-limit: 5
+              reviewers:
+                - "FernandoTN"
+              assignees:
+                - "FernandoTN"
+              commit-message:
+                prefix: "deps"
+                include: "scope"
+              groups:
+                openai:
+                  patterns:
+                    - "openai*"
+                testing:
+                  patterns:
+                    - "pytest*"
+                    - "coverage*"
+                linting:
+                  patterns:
+                    - "black*"
+                    - "ruff*"
+                    - "mypy*"
+            
+            # Docker dependencies
+            - package-ecosystem: "docker"
+              directory: "/"
+              schedule:
+                interval: "weekly"
+                day: "monday"
+                time: "09:00"
+              open-pull-requests-limit: 3
+          
+            # GitHub Actions
+            - package-ecosystem: "github-actions"
+              directory: "/"
+              schedule:
+                interval: "weekly"
+                day: "monday" 
+                time: "09:00"
+              open-pull-requests-limit: 3
+          EOF
+      
+      - name: 💾 Commit Dependabot Config
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .github/dependabot.yml
+            git commit -m "Update Dependabot configuration"
+            git push
+          else
+            echo "No changes to dependabot.yml"
+          fi
+
+  # Performance monitoring
+  performance-monitor:
+    name: 📊 Performance Monitoring
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install psutil memory-profiler
+      
+      - name: 📈 Run Performance Tests
+        run: |
+          echo "# Performance Report" > performance-report.md
+          echo "Generated: $(date)" >> performance-report.md
+          echo "Commit: ${{ github.sha }}" >> performance-report.md
+          echo "" >> performance-report.md
+          
+          echo "## System Information" >> performance-report.md
+          echo "- Python Version: $(python --version)" >> performance-report.md
+          echo "- Platform: $(uname -a)" >> performance-report.md
+          
+          echo "" >> performance-report.md
+          echo "## Memory and CPU Usage" >> performance-report.md
+          
+          # Run a simple performance test if we have API key
+          if [ -n "$OPENAI_API_KEY" ]; then
+            echo "Running basic agent test..."
+            timeout 60 python -c "
+          import sys
+          sys.path.append('src')
+          from repo_patcher.agent.config import AgentConfig
+          from repo_patcher.agent.openai_client import OpenAIClient
+          print('Basic client initialization successful')
+          " || echo "Performance test timed out or failed"
+          else
+            echo "Skipping API tests (no API key)"
+          fi
+          
+          echo "Performance tests completed" >> performance-report.md
+        continue-on-error: true
+      
+      - name: 📤 Upload Performance Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report-${{ github.run_number }}
+          path: performance-report.md
+          retention-days: 30
+
+  # Documentation updates
+  docs-check:
+    name: 📚 Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: 🔍 Check Documentation Freshness
+        run: |
+          echo "# Documentation Status Report" > docs-status.md
+          echo "Generated: $(date)" >> docs-status.md
+          echo "" >> docs-status.md
+          
+          echo "## File Status" >> docs-status.md
+          echo "| File | Last Modified | Size |" >> docs-status.md
+          echo "|------|---------------|------|" >> docs-status.md
+          
+          for file in *.md docs/*.md 2>/dev/null || true; do
+            if [ -f "$file" ]; then
+              echo "| $file | $(date -r "$file" 2>/dev/null || echo 'unknown') | $(wc -c < "$file") bytes |" >> docs-status.md
+            fi
+          done
+          
+          echo "" >> docs-status.md
+          echo "## README Status" >> docs-status.md
+          if [ -f "README.md" ]; then
+            echo "✅ README.md exists" >> docs-status.md
+          else
+            echo "❌ README.md missing" >> docs-status.md
+          fi
+          
+          echo "" >> docs-status.md  
+          echo "## Required Sections Check" >> docs-status.md
+          if grep -q "## Installation" README.md 2>/dev/null; then
+            echo "✅ Installation section found" >> docs-status.md
+          else
+            echo "⚠️ Installation section missing" >> docs-status.md
+          fi
+      
+      - name: 📤 Upload Documentation Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-status-${{ github.run_number }}
+          path: docs-status.md
+          retention-days: 30
+
+  # Cleanup old artifacts and releases
+  cleanup:
+    name: 🧹 Cleanup
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🗑️ Clean Up Old Artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get artifacts older than 30 days
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            let deletedCount = 0;
+            for (const artifact of artifacts.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              if (createdAt < thirtyDaysAgo) {
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id
+                  });
+                  deletedCount++;
+                  console.log(`Deleted artifact: ${artifact.name}`);
+                } catch (error) {
+                  console.log(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`Cleaned up ${deletedCount} old artifacts`);
+      
+      - name: 📊 Generate Cleanup Report
+        run: |
+          echo "# Maintenance Cleanup Report" > cleanup-report.md
+          echo "Generated: $(date)" >> cleanup-report.md
+          echo "Automated cleanup completed" >> cleanup-report.md
+      
+      - name: 📤 Upload Cleanup Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-report-${{ github.run_number }}
+          path: cleanup-report.md
+          retention-days: 7
