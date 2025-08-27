@@ -17,6 +17,7 @@ from .models import (
 )
 from .openai_client import OpenAIClient, INGEST_SCHEMA
 from .exceptions import AIClientError, ConfigurationError
+from .shutdown import managed_operation, operation_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -48,51 +49,53 @@ class IngestHandler(StateHandler):
         """Ingest repository information and identify failing tests."""
         logger.info(f"Ingesting repository: {session.repository.repo_path}")
         
-        try:
-            # Step 1: Analyze repository structure
-            repo_structure = await self._analyze_repo_structure(session.repository.repo_path)
-            
-            # Step 2: Run tests to identify failures if not already provided
-            if not session.repository.failing_tests:
-                test_results = await self._run_initial_tests(session)
-            else:
-                test_results = {
-                    "failing_tests": session.repository.failing_tests,
-                    "test_output": session.repository.test_output
-                }
-            
-            # Step 3: Use AI to analyze failures and repository context
-            if self.ai_client:
-                analysis_result = await self._ai_analyze_failures(
-                    repo_structure, test_results, session
-                )
-                
-                # Store analysis in session context
-                session.context.add_code_context("ingest_analysis", analysis_result)
-                
-                # Update repository with analyzed failures
-                if analysis_result.get("failing_tests"):
-                    session.repository.failing_tests = [
-                        test["test_name"] for test in analysis_result["failing_tests"]
-                    ]
-            
-            input_data = {
-                "repo_path": str(session.repository.repo_path),
-                "structure_files": len(repo_structure.get("files", [])),
-                "failing_tests_count": len(session.repository.failing_tests)
-            }
-            
-            output_data = {
-                "structure_analyzed": True,
-                "failing_tests": len(session.repository.failing_tests),
-                "ai_analysis_available": self.ai_client is not None
-            }
-            
-            return StepResult.SUCCESS
-            
-        except Exception as e:
-            logger.error(f"Error in ingest handler: {e}")
-            raise
+        async with managed_operation("ingest_repository"):
+            async with operation_timeout(session.config.state_timeout, "ingest"):
+                try:
+                    # Step 1: Analyze repository structure
+                    repo_structure = await self._analyze_repo_structure(session.repository.repo_path)
+                    
+                    # Step 2: Run tests to identify failures if not already provided
+                    if not session.repository.failing_tests:
+                        test_results = await self._run_initial_tests(session)
+                    else:
+                        test_results = {
+                            "failing_tests": session.repository.failing_tests,
+                            "test_output": session.repository.test_output
+                        }
+                    
+                    # Step 3: Use AI to analyze failures and repository context
+                    if self.ai_client:
+                        analysis_result = await self._ai_analyze_failures(
+                            repo_structure, test_results, session
+                        )
+                        
+                        # Store analysis in session context
+                        session.context.add_code_context("ingest_analysis", analysis_result)
+                        
+                        # Update repository with analyzed failures
+                        if analysis_result.get("failing_tests"):
+                            session.repository.failing_tests = [
+                                test["test_name"] for test in analysis_result["failing_tests"]
+                            ]
+                    
+                    input_data = {
+                        "repo_path": str(session.repository.repo_path),
+                        "structure_files": len(repo_structure.get("files", [])),
+                        "failing_tests_count": len(session.repository.failing_tests)
+                    }
+                    
+                    output_data = {
+                        "structure_analyzed": True,
+                        "failing_tests": len(session.repository.failing_tests),
+                        "ai_analysis_available": self.ai_client is not None
+                    }
+                    
+                    return StepResult.SUCCESS
+                    
+                except Exception as e:
+                    logger.error(f"Error in ingest handler: {e}")
+                    raise
     
     async def _analyze_repo_structure(self, repo_path: Path) -> Dict[str, Any]:
         """Analyze repository file structure and dependencies."""

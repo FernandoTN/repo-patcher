@@ -4,12 +4,16 @@ import time
 import asyncio
 from typing import Dict, Any, Optional, List, Union
 from dataclasses import dataclass, asdict
-from jsonschema import validate, ValidationError
+from jsonschema import validate
+from jsonschema import ValidationError as JSONValidationError
 import openai
 from openai import AsyncOpenAI
 
 from .config import AgentConfig
 from .exceptions import AIClientError, ConfigurationError
+from .validation import InputValidator, ValidationError
+from .rate_limiter import openai_rate_limiter, openai_circuit_breaker, CircuitBreakerError
+from .structured_logging import get_logger, log_context, operation_timer, log_api_call, log_cost, log_performance, metrics
 import logging
 
 
@@ -49,12 +53,22 @@ class OpenAIClient:
     def __init__(self, config: AgentConfig):
         """Initialize OpenAI client with configuration."""
         self.config = config
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
+        self.validator = InputValidator()
         
+        # Validate configuration
         if not config.openai_api_key:
             raise ConfigurationError(
                 "OpenAI API key not found. Set OPENAI_API_KEY environment variable."
             )
+        
+        try:
+            self.validator.validate_openai_key(config.openai_api_key)
+            self.validator.validate_model_name(config.model_name)
+            self.validator.validate_temperature(config.temperature)
+            self.validator.validate_max_tokens(config.max_tokens)
+        except ValidationError as e:
+            raise ConfigurationError(f"Configuration validation failed: {e}")
         
         self.client = AsyncOpenAI(
             api_key=config.openai_api_key,
@@ -88,11 +102,34 @@ class OpenAIClient:
         """
         max_retries = max_retries or self.config.retry_attempts
         
+        # Validate inputs
+        try:
+            validated_messages = []
+            for msg in messages:
+                if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
+                    raise ValidationError("Each message must have 'role' and 'content' keys")
+                
+                validated_msg = {
+                    "role": self.validator.validate_string(msg["role"], "message role"),
+                    "content": self.validator.validate_string(msg["content"], "message content")
+                }
+                
+                if validated_msg["role"] not in ["user", "assistant", "system"]:
+                    raise ValidationError(f"Invalid message role: {validated_msg['role']}")
+                
+                validated_messages.append(validated_msg)
+            
+            if system_prompt:
+                system_prompt = self.validator.validate_string(system_prompt, "system prompt")
+                
+        except ValidationError as e:
+            raise AIClientError(f"Input validation failed: {e}")
+        
         # Prepare messages
         if system_prompt:
-            full_messages = [{"role": "system", "content": system_prompt}] + messages
+            full_messages = [{"role": "system", "content": system_prompt}] + validated_messages
         else:
-            full_messages = messages.copy()
+            full_messages = validated_messages.copy()
         
         # Add JSON format instruction
         full_messages.append({
@@ -101,73 +138,99 @@ class OpenAIClient:
         })
         
         for attempt in range(max_retries + 1):
-            try:
-                self.logger.debug(f"API request attempt {attempt + 1}/{max_retries + 1}")
-                
-                response = await self.client.chat.completions.create(
-                    model=self.config.model_name,
-                    messages=full_messages,
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
-                )
-                
-                # Extract response data
-                content = response.choices[0].message.content or ""
-                finish_reason = response.choices[0].finish_reason
-                
-                # Track token usage
-                usage = TokenUsage(
-                    prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
-                    completion_tokens=response.usage.completion_tokens if response.usage else 0,
-                    total_tokens=response.usage.total_tokens if response.usage else 0,
-                )
-                
-                self.total_tokens.prompt_tokens += usage.prompt_tokens
-                self.total_tokens.completion_tokens += usage.completion_tokens
-                self.total_tokens.total_tokens += usage.total_tokens
-                self.total_cost += usage.estimated_cost
-                
-                self.logger.info(f"API call completed. Tokens: {usage.total_tokens}, Cost: ${usage.estimated_cost:.4f}")
-                
-                # Parse and validate JSON
+            async with operation_timer(self.logger, "openai_api_call", 
+                                      attempt=attempt + 1, 
+                                      model=self.config.model_name,
+                                      max_tokens=self.config.max_tokens) as correlation_id:
                 try:
-                    parsed_data = json.loads(content)
-                    validate(instance=parsed_data, schema=schema)
+                    self.logger.debug(f"API request attempt {attempt + 1}/{max_retries + 1}")
                     
-                    return AIResponse(
-                        content=content,
-                        parsed_data=parsed_data,
-                        token_usage=usage,
-                        model=self.config.model_name,
-                        finish_reason=finish_reason,
+                    # Apply rate limiting
+                    if not await openai_rate_limiter.acquire():
+                        wait_succeeded = await openai_rate_limiter.wait_for_slot(max_wait=60.0)
+                        if not wait_succeeded:
+                            raise AIClientError("Rate limit exceeded and wait timeout reached")
+                    
+                    # Apply circuit breaker
+                    async def make_api_call():
+                        return await self.client.chat.completions.create(
+                            model=self.config.model_name,
+                            messages=full_messages,
+                            temperature=self.config.temperature,
+                            max_tokens=self.config.max_tokens,
+                        )
+                    
+                    response = await openai_circuit_breaker.call(make_api_call)
+                    
+                    # Extract response data
+                    content = response.choices[0].message.content or ""
+                    finish_reason = response.choices[0].finish_reason
+                    
+                    # Track token usage
+                    usage = TokenUsage(
+                        prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                        completion_tokens=response.usage.completion_tokens if response.usage else 0,
+                        total_tokens=response.usage.total_tokens if response.usage else 0,
                     )
                     
-                except (json.JSONDecodeError, ValidationError) as e:
+                    self.total_tokens.prompt_tokens += usage.prompt_tokens
+                    self.total_tokens.completion_tokens += usage.completion_tokens
+                    self.total_tokens.total_tokens += usage.total_tokens
+                    self.total_cost += usage.estimated_cost
+                    
+                    # Log performance and cost metrics
+                    log_cost(self.logger, "openai_api_call", usage.estimated_cost, 
+                            model=self.config.model_name, tokens=usage.total_tokens)
+                    
+                    # Record metrics
+                    metrics.increment("openai_requests_total", 1, {"model": self.config.model_name})
+                    metrics.histogram("openai_tokens_used", usage.total_tokens, {"model": self.config.model_name})
+                    
+                    self.logger.info(f"API call completed. Tokens: {usage.total_tokens}, Cost: ${usage.estimated_cost:.4f}")
+                    
+                    # Parse and validate JSON
+                    try:
+                        parsed_data = json.loads(content)
+                        validate(instance=parsed_data, schema=schema)
+                        
+                        return AIResponse(
+                            content=content,
+                            parsed_data=parsed_data,
+                            token_usage=usage,
+                            model=self.config.model_name,
+                            finish_reason=finish_reason,
+                        )
+                    
+                    except (json.JSONDecodeError, JSONValidationError) as e:
+                        if attempt < max_retries:
+                            self.logger.warning(f"JSON validation failed (attempt {attempt + 1}): {e}")
+                            full_messages.append({
+                                "role": "assistant", 
+                                "content": content
+                            })
+                            full_messages.append({
+                                "role": "user",
+                                "content": f"Invalid JSON response. Error: {str(e)}. Please provide valid JSON matching the schema."
+                            })
+                            continue
+                        else:
+                            raise AIClientError(f"Failed to get valid JSON after {max_retries + 1} attempts: {e}")
+                
+                except CircuitBreakerError as e:
+                    self.logger.error(f"Circuit breaker is open: {e}")
+                    raise AIClientError(f"Service temporarily unavailable due to failures: {e}")
+                
+                except openai.APIError as e:
                     if attempt < max_retries:
-                        self.logger.warning(f"JSON validation failed (attempt {attempt + 1}): {e}")
-                        full_messages.append({
-                            "role": "assistant", 
-                            "content": content
-                        })
-                        full_messages.append({
-                            "role": "user",
-                            "content": f"Invalid JSON response. Error: {str(e)}. Please provide valid JSON matching the schema."
-                        })
+                        delay = self.config.retry_delay * (2 ** attempt)  # Exponential backoff
+                        self.logger.warning(f"API error (attempt {attempt + 1}): {e}. Retrying in {delay}s")
+                        await asyncio.sleep(delay)
                         continue
                     else:
-                        raise AIClientError(f"Failed to get valid JSON after {max_retries + 1} attempts: {e}")
+                        raise AIClientError(f"OpenAI API error after {max_retries + 1} attempts: {e}")
                 
-            except openai.APIError as e:
-                if attempt < max_retries:
-                    delay = self.config.retry_delay * (2 ** attempt)  # Exponential backoff
-                    self.logger.warning(f"API error (attempt {attempt + 1}): {e}. Retrying in {delay}s")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    raise AIClientError(f"OpenAI API error after {max_retries + 1} attempts: {e}")
-            
-            except Exception as e:
-                raise AIClientError(f"Unexpected error: {e}")
+                except Exception as e:
+                    raise AIClientError(f"Unexpected error: {e}")
         
         raise AIClientError(f"Failed after {max_retries + 1} attempts")
     

@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Optional
 import os
+import json
+
+from .config_schema import validate_agent_config, load_and_validate_config, config_validator
 
 
 @dataclass
@@ -72,9 +75,52 @@ class AgentConfig:
     
     @classmethod
     def from_file(cls, config_path: Path) -> "AgentConfig":
-        """Load configuration from JSON/YAML file."""
-        # TODO: Implement file loading
-        return cls()
+        """Load configuration from JSON file with validation."""
+        try:
+            validated_config = load_and_validate_config(config_path)
+            return cls(**validated_config)
+        except Exception as e:
+            raise ValueError(f"Failed to load configuration from {config_path}: {e}")
+    
+    @classmethod
+    def from_dict(cls, config_dict: Dict[str, Any]) -> "AgentConfig":
+        """Create configuration from dictionary with validation."""
+        try:
+            validated_config = validate_agent_config(config_dict)
+            return cls(**validated_config)
+        except Exception as e:
+            raise ValueError(f"Invalid configuration: {e}")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to dictionary."""
+        return {
+            "max_iterations": self.max_iterations,
+            "max_session_duration": self.max_session_duration,
+            "state_timeout": self.state_timeout,
+            "max_cost_per_session": self.max_cost_per_session,
+            "cost_warning_threshold": self.cost_warning_threshold,
+            "max_diff_lines_per_file": self.max_diff_lines_per_file,
+            "max_total_diff_lines": self.max_total_diff_lines,
+            "require_approval_threshold": self.require_approval_threshold,
+            "test_timeout": self.test_timeout,
+            "search_max_results": self.search_max_results,
+            "patch_backup": self.patch_backup,
+            "model_name": self.model_name,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "openai_api_key": self.openai_api_key,
+            "openai_base_url": self.openai_base_url,
+            "retry_attempts": self.retry_attempts,
+            "retry_delay": self.retry_delay,
+            "blocked_paths": self.blocked_paths,
+            "allowed_file_types": self.allowed_file_types
+        }
+    
+    def save_to_file(self, config_path: Path) -> None:
+        """Save configuration to JSON file."""
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, 'w') as f:
+            json.dump(self.to_dict(), f, indent=2)
     
     def validate(self) -> bool:
         """Validate configuration values."""

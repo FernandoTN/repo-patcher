@@ -17,7 +17,7 @@ async def test_architecture_integration():
     
     # Create configuration
     config = AgentConfig(
-        openai_api_key="mock-key",
+        openai_api_key="sk-mock1234567890abcdef1234567890abcdef",
         model_name="gpt-4o-mini",
         max_iterations=2,
         max_cost_per_session=1.0
@@ -125,7 +125,7 @@ async def test_cost_tracking():
     """Test that cost tracking works properly."""
     print("\n💰 Testing Cost Tracking...")
     
-    config = AgentConfig(openai_api_key="mock-key", max_cost_per_session=0.10)
+    config = AgentConfig(openai_api_key="sk-mock1234567890abcdef1234567890abcdef", max_cost_per_session=0.10)
     client = OpenAIClient(config)
     
     # Simulate adding costs
