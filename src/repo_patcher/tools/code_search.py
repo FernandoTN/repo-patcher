@@ -3,7 +3,7 @@ import os
 import re
 import ast
 import logging
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -50,35 +50,35 @@ class CodeSearchTool(BaseTool):
     """Tool for semantic code search and repository understanding."""
     
     def __init__(self):
-        super().__init__()
+        super().__init__("code_search")
         self.supported_extensions = {'.py', '.js', '.ts', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
         self.ignore_patterns = {
             '__pycache__', '.git', '.pytest_cache', 'node_modules', 
             '.venv', 'venv', '.env', 'dist', 'build', '.DS_Store'
         }
     
-    async def execute(self, **kwargs) -> ToolResult:
+    async def _execute(self, **kwargs) -> Any:
         """Execute code search operation."""
         operation = kwargs.get('operation', 'search')
         repo_path = Path(kwargs.get('repo_path', '.'))
         
         if operation == 'search':
-            return await self._search_code(repo_path, kwargs)
+            result = await self._search_code(repo_path, kwargs)
         elif operation == 'analyze_structure':
-            return await self._analyze_repository_structure(repo_path)
+            result = await self._analyze_repository_structure(repo_path)
         elif operation == 'find_functions':
-            return await self._find_functions(repo_path, kwargs.get('pattern', ''))
+            result = await self._find_functions(repo_path, kwargs.get('pattern', ''))
         elif operation == 'find_classes':
-            return await self._find_classes(repo_path, kwargs.get('pattern', ''))
+            result = await self._find_classes(repo_path, kwargs.get('pattern', ''))
         elif operation == 'analyze_imports':
-            return await self._analyze_imports(repo_path)
+            result = await self._analyze_imports(repo_path)
         else:
-            return ToolResult(
-                success=False,
-                data={},
-                error=f"Unsupported operation: {operation}",
-                cost=0.0
-            )
+            raise ValueError(f"Unsupported operation: {operation}")
+        
+        if not result.success:
+            raise RuntimeError(result.error or "Operation failed")
+        
+        return result.data
     
     async def _search_code(self, repo_path: Path, params: Dict[str, Any]) -> ToolResult:
         """Search for code patterns in repository."""
@@ -604,4 +604,5 @@ class CodeSearchTool(BaseTool):
     
     def _calculate_cost(self, **kwargs) -> float:
         """Code search operations are free."""
+        _ = kwargs  # Suppress unused parameter warning
         return 0.0

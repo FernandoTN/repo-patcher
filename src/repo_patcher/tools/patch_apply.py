@@ -40,34 +40,34 @@ class PatchApplyTool(BaseTool):
     """Tool for safely applying code patches with backup and rollback."""
     
     def __init__(self):
-        super().__init__()
+        super().__init__("patch_apply")
         self.backup_dir_name = '.repo_patcher_backups'
         self.max_backup_age_days = 7  # Clean up old backups
         
-    async def execute(self, **kwargs) -> ToolResult:
+    async def _execute(self, **kwargs) -> Any:
         """Execute patch application operation."""
         operation = kwargs.get('operation', 'apply_patches')
         repo_path = Path(kwargs.get('repo_path', '.'))
         
         if operation == 'apply_patches':
-            return await self._apply_patches(repo_path, kwargs)
+            result = await self._apply_patches(repo_path, kwargs)
         elif operation == 'create_backup':
-            return await self._create_backup(repo_path, kwargs)
+            result = await self._create_backup(repo_path, kwargs)
         elif operation == 'restore_backup':
-            return await self._restore_backup(repo_path, kwargs)
+            result = await self._restore_backup(repo_path, kwargs)
         elif operation == 'rollback_changes':
-            return await self._rollback_changes(repo_path, kwargs)
+            result = await self._rollback_changes(repo_path, kwargs)
         elif operation == 'validate_patches':
-            return await self._validate_patches(kwargs.get('patches', []))
+            result = await self._validate_patches(kwargs.get('patches', []))
         elif operation == 'preview_changes':
-            return await self._preview_changes(repo_path, kwargs)
+            result = await self._preview_changes(repo_path, kwargs)
         else:
-            return ToolResult(
-                success=False,
-                data={},
-                error=f"Unsupported operation: {operation}",
-                cost=0.0
-            )
+            raise ValueError(f"Unsupported operation: {operation}")
+        
+        if not result.success:
+            raise RuntimeError(result.error or "Operation failed")
+        
+        return result.data
     
     async def _apply_patches(self, repo_path: Path, params: Dict[str, Any]) -> ToolResult:
         """Apply a list of patches safely with backups."""
@@ -642,4 +642,5 @@ class PatchApplyTool(BaseTool):
     
     def _calculate_cost(self, **kwargs) -> float:
         """Patch operations are free."""
+        _ = kwargs  # Suppress unused parameter warning
         return 0.0
