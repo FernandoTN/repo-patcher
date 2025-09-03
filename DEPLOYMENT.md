@@ -1,6 +1,6 @@
-# 🚀 Deployment Guide - Phase 1D Infrastructure
+# 🚀 Deployment Guide - Phase 2 Multi-Language Platform
 
-This guide covers deploying Repo Patcher in production with Docker, GitHub Actions, and comprehensive monitoring.
+This guide covers deploying Repo Patcher Phase 2 with multi-language support, advanced safety features, and performance optimization in production.
 
 ## 📋 Prerequisites
 
@@ -36,11 +36,14 @@ The GitHub token needs these permissions:
 git clone https://github.com/FernandoTN/repo-patcher.git
 cd repo-patcher
 
-# 2. Configure environment
+# 2. Run Phase 2 verification (CRITICAL - Test before deployment)
+python verify_phase2.py
+
+# 3. Configure environment
 cp .env.example .env
 # Edit .env with your configuration
 
-# 3. Build and run
+# 4. Build and run
 docker-compose up --build
 ```
 
@@ -105,6 +108,87 @@ Ensure GitHub Actions has appropriate permissions:
 2. Create an issue describing the problem
 3. Apply the `fix-me` label
 4. Watch the action run and create a PR with fixes
+
+## 🔧 Phase 2 Components
+
+### Multi-Language Support
+
+Phase 2 adds support for multiple programming languages. Ensure your deployment environment supports:
+
+```bash
+# Language runtime requirements
+python >= 3.9      # Python projects
+node >= 16         # JavaScript/TypeScript projects  
+go >= 1.19         # Go projects
+```
+
+### New Environment Variables
+
+Phase 2 introduces additional configuration options:
+
+```bash
+# Performance Optimization
+CACHE_SIZE=1000                    # Intelligent cache size
+CACHE_TTL=3600                    # Cache TTL in seconds
+OPTIMIZATION_LEVEL=balanced        # conservative|balanced|aggressive
+
+# Safety & Security
+SAFETY_ENABLED=true               # Enable advanced safety features
+APPROVAL_REQUIRED_THRESHOLD=high  # Auto-approval threshold
+AUDIT_LOGGING=true               # Enable audit logging
+
+# Cost Management
+MAX_COST_PER_SESSION=0.50        # Maximum cost per session
+MAX_COST_PER_FIX=0.25           # Maximum cost per fix
+PREFERRED_MODEL=gpt-4o-mini      # Default AI model
+```
+
+### Safety Configuration
+
+Configure safety rules for your organization:
+
+```yaml
+# config/safety.yaml
+file_protection:
+  critical_patterns:
+    - ".github/workflows/"
+    - "Dockerfile*"
+    - "*.env*"
+    - "docker-compose*.yml"
+  
+  sensitive_patterns:
+    - "package.json"
+    - "pyproject.toml" 
+    - "go.mod"
+    - "**/config/*"
+
+risk_assessment:
+  max_lines_changed: 100
+  require_approval_threshold: "medium"
+  block_threshold: "critical"
+```
+
+### ⚠️ Pre-Deployment Testing
+
+**CRITICAL**: Run comprehensive testing before production deployment:
+
+```bash
+# 1. Run Phase 2 verification
+python verify_phase2.py
+
+# 2. Run all unit tests
+python -m pytest tests/ -v
+
+# 3. Test multi-language scenarios
+python scripts/evaluate.py --scenarios scenarios/E002_js_missing_import
+python scripts/evaluate.py --scenarios scenarios/E003_go_missing_import
+
+# 4. Performance testing
+python -m pytest tests/test_phase2_performance.py -v
+
+# 5. Safety feature testing
+python -m pytest tests/test_phase2_safety.py -v
+```
 
 ## 📊 Monitoring & Observability
 

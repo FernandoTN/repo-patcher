@@ -1,0 +1,22 @@
+{
+  "id": "E003",
+  "name": "go_missing_import",
+  "description": "Go function uses fmt.Sprintf without importing fmt package",
+  "category": "import_dependency",
+  "difficulty": "easy",
+  "expected_iterations": 1,
+  "expected_diff_lines": 1,
+  "test_framework": "go_test",
+  "language": "go",
+  "files_to_change": ["utils.go"],
+  "test_command": "go test ./...",
+  "expected_error_patterns": [
+    "undefined: fmt",
+    "undefined: Sprintf"
+  ],
+  "learning_objectives": [
+    "Detect missing import statements in Go",
+    "Add appropriate import for standard library packages",
+    "Understand Go package system and imports"
+  ]
+}

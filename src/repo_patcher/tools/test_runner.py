@@ -1,111 +1,148 @@
-"""Tool for running tests in repositories."""
+"""Enhanced multi-language test runner tool."""
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from .base import BaseTool
 from ..evaluation.models import ExecutionStatus, TestExecution
+from .language_support import MultiLanguageTestRunner, LanguageDetector, Language, TestFramework
 
 
 class TestRunnerTool(BaseTool):
-    """Tool for executing test suites and parsing results."""
+    """Enhanced tool for executing test suites across multiple languages."""
     
     def __init__(self):
         super().__init__("run_tests")
+        self.multi_runner = MultiLanguageTestRunner()
     
     async def _execute(self, 
                       repo_path: Path, 
-                      test_command: str,
-                      timeout: int = 60) -> TestExecution:
-        """Execute tests and return structured results."""
+                      test_command: Optional[str] = None,
+                      timeout: int = 120) -> TestExecution:
+        """Execute tests and return structured results with multi-language support."""
         
-        # Use the existing test execution logic from evaluation framework
-        result = subprocess.run(
-            test_command.split(),
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
+        # Analyze repository to determine language and framework
+        repo_analysis = self.multi_runner.analyze_repository(repo_path)
         
-        # Parse pytest output to count passed/failed tests
-        stdout_lines = result.stdout.split('\n')
-        tests_passed = 0
-        tests_failed = 0
+        if "error" in repo_analysis:
+            return TestExecution(
+                result=ExecutionStatus.FAILED,
+                stdout="",
+                stderr=f"Repository analysis failed: {repo_analysis['error']}",
+                duration=0.0,
+                exit_code=1,
+                tests_passed=0,
+                tests_failed=0,
+                error_message=repo_analysis["error"]
+            )
+        
+        # Use provided test command or auto-detected one
+        final_command = test_command or repo_analysis.get("test_command")
+        
+        if not final_command:
+            return TestExecution(
+                result=ExecutionStatus.FAILED,
+                stdout="",
+                stderr="No test command available",
+                duration=0.0,
+                exit_code=1,
+                tests_passed=0,
+                tests_failed=0,
+                error_message="Could not determine test command"
+            )
+        
+        # Execute the test command
+        try:
+            result = subprocess.run(
+                final_command.split(),
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+        except subprocess.TimeoutExpired:
+            return TestExecution(
+                result=ExecutionStatus.FAILED,
+                stdout="",
+                stderr=f"Test execution timed out after {timeout} seconds",
+                duration=float(timeout),
+                exit_code=124,  # Standard timeout exit code
+                tests_passed=0,
+                tests_failed=0,
+                error_message=f"Timeout after {timeout} seconds"
+            )
+        except Exception as e:
+            return TestExecution(
+                result=ExecutionStatus.FAILED,
+                stdout="",
+                stderr=f"Test execution failed: {str(e)}",
+                duration=0.0,
+                exit_code=1,
+                tests_passed=0,
+                tests_failed=0,
+                error_message=str(e)
+            )
+        
+        # Parse results using language-specific handler
+        language = Language(repo_analysis["language"])
+        handler = self.multi_runner.get_handler(language)
+        parsed_results = handler.parse_test_output(result.stdout, result.stderr, result.returncode)
+        
+        # Extract main error message
         error_message = None
-        
-        for line in stdout_lines:
-            if " passed" in line and " failed" in line:
-                # Line like "1 failed, 3 passed in 0.02s"
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == "failed,":
-                        tests_failed = int(parts[i-1])
-                    elif part == "passed":
-                        tests_passed = int(parts[i-1])
-            elif " passed in " in line:
-                # Line like "4 passed in 0.01s"
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == "passed":
-                        tests_passed = int(parts[i-1])
-            elif " failed in " in line:
-                # Line like "1 failed in 0.02s"
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == "failed":
-                        tests_failed = int(parts[i-1])
-
-        # Extract error message
         if result.returncode != 0:
-            if result.stderr:
-                error_message = result.stderr.strip()
-            else:
-                # Look for error in stdout
-                for line in stdout_lines:
-                    if "Error:" in line or "NameError:" in line or "ImportError:" in line:
-                        error_message = line.strip()
-                        break
-
+            error_message = self._extract_main_error(result.stderr, result.stdout, parsed_results)
+        
         test_result = ExecutionStatus.PASSED if result.returncode == 0 else ExecutionStatus.FAILED
         
         return TestExecution(
             result=test_result,
             stdout=result.stdout,
             stderr=result.stderr,
-            duration=0.0,  # We don't track duration here since it's handled by the base class
+            duration=parsed_results.get("duration", 0.0),
             exit_code=result.returncode,
-            tests_passed=tests_passed,
-            tests_failed=tests_failed,
+            tests_passed=parsed_results.get("tests_passed", 0),
+            tests_failed=parsed_results.get("tests_failed", 0),
             error_message=error_message
         )
     
+    def _extract_main_error(self, stderr: str, stdout: str, parsed_results: Dict[str, Any]) -> Optional[str]:
+        """Extract the main error message from test output."""
+        
+        # Check for errors in parsed results first
+        if parsed_results.get("errors"):
+            return parsed_results["errors"][0]  # Return first error
+        
+        # Check stderr
+        if stderr.strip():
+            lines = stderr.strip().split('\n')
+            for line in lines:
+                if any(keyword in line for keyword in ["Error:", "error:", "FAILED", "FAIL:"]):
+                    return line.strip()
+            return lines[0] if lines else None
+        
+        # Check stdout for error patterns
+        if stdout.strip():
+            lines = stdout.strip().split('\n')
+            for line in lines:
+                if any(keyword in line for keyword in ["Error:", "NameError:", "ImportError:", "TypeError:", "SyntaxError:"]):
+                    return line.strip()
+        
+        return "Test execution failed"
+    
+    def analyze_repository(self, repo_path: Path) -> Dict[str, Any]:
+        """Analyze repository to get language and test configuration info."""
+        return self.multi_runner.analyze_repository(repo_path)
+    
     def detect_test_framework(self, repo_path: Path) -> str:
         """Detect the test framework used in the repository."""
-        # Check for common test configuration files
-        if (repo_path / "pyproject.toml").exists():
-            # Check for pytest in pyproject.toml
-            return "pytest"
-        elif (repo_path / "package.json").exists():
-            # JavaScript project - likely jest
-            return "jest"
-        elif (repo_path / "go.mod").exists():
-            return "go test"
-        elif (repo_path / "pom.xml").exists() or (repo_path / "build.gradle").exists():
-            return "junit"
-        else:
-            # Default to pytest for Python projects
-            return "pytest"
+        analysis = self.analyze_repository(repo_path)
+        return analysis.get("framework", "unknown")
     
-    def get_test_command(self, repo_path: Path, framework: str) -> str:
+    def get_test_command(self, repo_path: Path, framework: str = None) -> str:
         """Get the appropriate test command for the framework."""
-        commands = {
-            "pytest": "python -m pytest tests/ -v",
-            "jest": "npm test",
-            "go test": "go test ./...",
-            "junit": "mvn test"
-        }
-        return commands.get(framework, "python -m pytest tests/ -v")
+        analysis = self.analyze_repository(repo_path)
+        return analysis.get("test_command", "echo 'No test command available'")
 
 
 class CodeSearchTool(BaseTool):
