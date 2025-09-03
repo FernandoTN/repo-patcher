@@ -12,7 +12,7 @@ from src.repo_patcher.tools.language_support import (
 from src.repo_patcher.tools.python_handler import PythonHandler
 from src.repo_patcher.tools.javascript_handler import JavaScriptHandler
 from src.repo_patcher.tools.go_handler import GoHandler
-from src.repo_patcher.tools.test_runner import TestRunnerTool
+from src.repo_patcher.tools.test_runner import TestRunnerTool as TestRunner
 
 
 class TestLanguageDetection:
@@ -279,7 +279,7 @@ class TestGoHandler:
         ./utils.go:6:12: undefined: fmt
         """
         
-        result = handler.parse_go_test_output(stdout, stderr)
+        result = handler.parse_test_output(stdout, stderr, 1)
         assert result["tests_passed"] == 1
         assert result["tests_failed"] == 1
         assert len(result["build_errors"]) > 0
@@ -396,7 +396,8 @@ class TestEnhancedTestRunner:
     """Test the enhanced test runner with multi-language support."""
     
     @patch('subprocess.run')
-    def test_execute_python_tests(self, mock_run):
+    @pytest.mark.asyncio
+    async def test_execute_python_tests(self, mock_run):
         """Test executing Python tests."""
         # Mock subprocess result
         mock_run.return_value = Mock(
@@ -413,7 +414,7 @@ class TestEnhancedTestRunner:
             (repo_path / "tests" / "test_main.py").parent.mkdir(exist_ok=True)
             (repo_path / "tests" / "test_main.py").write_text("def test_main(): pass")
             
-            runner = TestRunnerTool()
+            runner = TestRunner()
             result = await runner._execute(repo_path)
             
             assert result.result.value == "failed"
@@ -422,7 +423,8 @@ class TestEnhancedTestRunner:
             assert "NameError" in result.error_message
     
     @patch('subprocess.run')
-    def test_execute_javascript_tests(self, mock_run):
+    @pytest.mark.asyncio
+    async def test_execute_javascript_tests(self, mock_run):
         """Test executing JavaScript tests."""
         # Mock subprocess result
         mock_run.return_value = Mock(
@@ -438,7 +440,7 @@ class TestEnhancedTestRunner:
             package_json = {"name": "test", "devDependencies": {"jest": "^29.0.0"}}
             (repo_path / "package.json").write_text(json.dumps(package_json))
             
-            runner = TestRunnerTool()
+            runner = TestRunner()
             result = await runner._execute(repo_path)
             
             assert result.result.value == "failed"
@@ -452,7 +454,7 @@ class TestEnhancedTestRunner:
             # Create Python project
             (repo_path / "pyproject.toml").write_text("[tool.poetry]\nname = 'test'")
             
-            runner = TestRunnerTool()
+            runner = TestRunner()
             analysis = runner.analyze_repository(repo_path)
             
             assert analysis["language"] == "python"
@@ -470,7 +472,7 @@ class TestIntegration:
         scenario_path = Path(__file__).parent.parent / "scenarios" / "E001_missing_import"
         
         if scenario_path.exists():
-            runner = TestRunnerTool()
+            runner = TestRunner()
             repo_path = scenario_path / "repo"
             
             # Analyze repository
@@ -486,7 +488,7 @@ class TestIntegration:
         scenario_path = Path(__file__).parent.parent / "scenarios" / "E002_js_missing_import"
         
         if scenario_path.exists():
-            runner = TestRunnerTool()
+            runner = TestRunner()
             repo_path = scenario_path / "repo"
             
             # Analyze repository

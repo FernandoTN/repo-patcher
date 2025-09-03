@@ -305,7 +305,7 @@ def test_sample():
         try:
             # Test that existing evaluation framework still works
             from repo_patcher.evaluation.runner import EvaluationRunner
-            from repo_patcher.evaluation.models import TestScenario
+            from repo_patcher.evaluation.models import ScenarioMetadata
             
             # Test that existing scenario still loads
             e001_path = self.repo_root / "scenarios" / "E001_missing_import"

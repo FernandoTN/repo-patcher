@@ -55,8 +55,8 @@ class GoHandler(BaseLanguageHandler):
         # PASS
         # FAIL
         
-        passed_tests = len(re.findall(r'^--- PASS:', stdout, re.MULTILINE))
-        failed_tests = len(re.findall(r'^--- FAIL:', stdout, re.MULTILINE))
+        passed_tests = len(re.findall(r'^\s*--- PASS:', stdout, re.MULTILINE))
+        failed_tests = len(re.findall(r'^\s*--- FAIL:', stdout, re.MULTILINE))
         
         result["tests_passed"] = passed_tests
         result["tests_failed"] = failed_tests

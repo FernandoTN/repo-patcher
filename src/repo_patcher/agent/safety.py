@@ -83,6 +83,7 @@ class IntelligentFileProtector:
         r'.*config.*\.ya?ml$',  # Config files
         r'.*\.dockerfile$',     # Dockerfile variants
         r'.*kubernetes.*\.ya?ml$', # Kubernetes configs
+        r'.*k8s.*\.ya?ml$',       # K8s configs (short form)
         r'.*helm.*\.ya?ml$',    # Helm charts
         r'.*terraform.*\.tf$',  # Terraform files
         r'.*ansible.*\.ya?ml$', # Ansible playbooks
@@ -95,9 +96,19 @@ class IntelligentFileProtector:
         """Assess the risk level of modifying a specific file."""
         file_str = str(file_path).lower()
         
-        # Check critical files
+        # Check critical files - exact matches or specific patterns
+        file_name = file_path.name.lower()
         for critical_pattern in self.CRITICAL_FILES:
-            if critical_pattern in file_str:
+            critical_lower = critical_pattern.lower()
+            # Check for directory patterns (end with /)
+            if critical_lower.endswith('/') and critical_lower[:-1] in file_str:
+                return RiskLevel.CRITICAL
+            # Check for exact filename matches
+            elif not critical_lower.endswith('/') and (
+                file_name == critical_lower or 
+                file_str == critical_lower or
+                (critical_lower.startswith('.') and file_name == critical_lower)
+            ):
                 return RiskLevel.CRITICAL
         
         # Check sensitive files

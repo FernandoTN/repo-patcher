@@ -76,8 +76,10 @@ class JavaScriptHandler(BaseLanguageHandler):
             "duration": 0.0
         }
         
-        # Parse Jest output
-        if "Jest" in stdout or "jest" in stdout:
+        # Parse Jest output - check for Jest patterns
+        if ("Jest" in stdout or "jest" in stdout or 
+            "Test Suites:" in stdout or 
+            "Tests:" in stdout and "total" in stdout):
             result.update(self._parse_jest_output(stdout, stderr))
         
         # Parse Vitest output
